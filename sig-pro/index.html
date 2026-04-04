@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virion - Sistema de Contról</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Bootstrap CSS (Grid and Utilities) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Tabulator CSS -->
+    <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+
+    <!-- Custom Premium CSS -->
+    <link rel="stylesheet" href="./src/styles/main.css">
+</head>
+
+<body class="dark-theme">
+    <!-- Map Container Fullscreen -->
+    <div id="map"></div>
+
+    <!-- 3D Globe Overlay (Top over map) -->
+    <div id="map-3d-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: #000;"></div>
+
+    <!-- Floating Top Bar -->
+    <header class="glass-header">
+        <div class="brand">
+            <i class="bi bi-globe-americas"></i>
+            <span>Virion <strong>Sistema de control</strong></span>
+        </div>
+        <div class="header-tools">
+            <div class="status-indicator">
+                <span id="connection-status" class="dot disconnected"></span>
+                <span id="connection-text">Offline</span>
+            </div>
+            <div class="search-container d-flex align-items-center me-2" style="margin-left: 15px;">
+                <input type="text" id="zone-search-input" class="form-control-sm glass-input"
+                    placeholder="Buscar zona..."
+                    style="background: rgba(0,0,0,0.4); border: 1px solid rgba(0, 229, 255, 0.3); color: white; border-radius: 4px; padding: 4px 8px; margin-right: 5px; width: 180px; outline: none;"
+                    onkeypress="if(event.key === 'Enter') window.searchZone()">
+                <button class="btn-glass" onclick="window.searchZone()" title="Buscar Zona" id="zone-search-btn">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            <button class="btn-glass" onclick="window.toggleFireAPI()" title="API Incendios VIIRS-NOAA-20 (SP)"
+                id="fire-api-toggle">
+                <i class="bi bi-fire"></i>
+            </button>
+            <button class="btn-glass" onclick="window.toggleTheme()" title="Cambiar Tema" id="theme-toggle">
+                <i class="bi bi-moon-stars"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Barra de herramientas de izquierda -->
+    <nav class="glass-sidebar">
+        <!-- Tools -->
+        <div class="tool-group">
+            <button class="btn-icon" onclick="window.addLayer()" title="Añadir Geometría / Datos Dinámicos">
+                <i class="bi bi-plus-circle"></i>
+            </button>
+            <button class="btn-icon" onclick="window.addRasterLayer()" title="Añadir Imagen Raster (TIFF)">
+                <i class="bi bi-image"></i>
+            </button>
+            <button class="btn-icon" onclick="window.openAttributeTable()" title="Tabla de Atributos">
+                <i class="bi bi-table"></i>
+            </button>
+            <button class="btn-icon" onclick="window.toggleChartManager()" title="Análisis y Data Viz (ECharts)">
+                <i class="bi bi-graph-up-arrow" style="color: #ff6600;"></i>
+            </button>
+            <button class="btn-icon" onclick="window.toggleDataLens()"
+                title="Spyglass Analítico: Gráfico ECharts en tiempo real">
+                <i class="bi bi-bullseye" style="color: #00e5ff;"></i>
+            </button>
+            <button class="btn-icon" onclick="window.toggleHexbinTool()" title="Generar Hexbins desde Raster">
+                <i class="bi bi-hexagon-fill" style="color: #a200ff;"></i>
+            </button>
+            <button class="btn-icon" onclick="window.toggleFuelCostPanel()" title="Medidor Costo Combustible">
+                <i class="bi bi-fuel-pump-fill" style="color: #00ff88;"></i>
+            </button>
+            <button class="btn-icon" onclick="window.toggle3DModePanel()" title="Modo 3D Extrusión">
+                <i class="bi bi-box" style="color: #ffaa00;"></i>
+            </button>
+            <button class="btn-icon" onclick="window.zoomToExtent()" title="Zoom Global">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
+            <button class="btn-icon" onclick="window.clearMap()" title="Limpiar Mapa">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+        <div class="separator"></div>
+        <div class="tool-group">
+            <!-- Funcionalidades Cyberpunk integradas al look&feel avanzado -->
+            <button class="btn-icon" onclick="window.toggleCyberGlobe()" title="Módulo CyberGlobe">
+                <i class="bi bi-cpu" style="color: #0ff;"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Advanced Chart Manager Panel (Retractable Left) -->
+    <aside class="glass-panel chart-manager-panel" id="chart-manager-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(255, 102, 0, 0.3);">
+            <h6 style="color: #ff8a33;"><i class="bi bi-bar-chart-fill me-2"></i>Data Viz <span class="badge"
+                    style="background: rgba(255, 102, 0, 0.2); border: 1px solid #ff6600; color: #ff8a33; font-size: 0.5rem; margin-left: 5px;">ECHARTS</span>
+            </h6>
+            <button class="btn-icon-sm" onclick="window.toggleChartManager()" style="color: #ff6600;"><i
+                    class="bi bi-x"></i></button>
+        </div>
+        <div class="panel-body">
+            <div class="mb-3">
+                <label class="form-label-xs" style="color:#ff8a33;">Fuente de Datos</label>
+                <select id="chart-data-source" class="custom-select-sm"
+                    style="border-color: rgba(255, 102, 0, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                    onchange="window.updateChartSetup()">
+                    <option value="none">Seleccione orígen...</option>
+                    <option value="vector">Datos Vectoriales (Atributos)</option>
+                    <option value="raster">Datos Raster (Espectral)</option>
+                    <option value="fuel">Costo Combustible</option>
+                </select>
+            </div>
+
+            <div id="vector-chart-setup" style="display:none;">
+                <div class="mb-2">
+                    <label class="form-label-xs">Eje X (Categoría/ID)</label>
+                    <select id="chart-x-axis" class="custom-select-sm"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label-xs">Eje Y (Valor Numérico)</label>
+                    <select id="chart-y-axis" class="custom-select-sm"></select>
+                </div>
+            </div>
+
+            <div id="raster-chart-setup" style="display:none;">
+                <div class="mb-3">
+                    <label class="form-label-xs">Banda para Histograma</label>
+                    <select id="chart-raster-band" class="custom-select-sm"></select>
+                </div>
+            </div>
+
+            <!-- Fuel Cost Chart Setup -->
+            <div id="fuel-chart-setup" style="display:none;">
+                <div class="mb-3">
+                    <label class="form-label-xs" style="color:#00ff88;">Tipo Gráfico</label>
+                    <select id="fuel-chart-type" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                        <option value="bar">Barras Comparativas</option>
+                        <option value="line">Línea Tendencia</option>
+                        <option value="pie">Distribución Pastel</option>
+                        <option value="radar">Radar Eficiencia</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label-xs" style="color:#00ff88;">Variable X</label>
+                    <select id="fuel-chart-x" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                        <option value="distance">Distancia (km)</option>
+                        <option value="fuel">Combustible (L)</option>
+                        <option value="cost">Costo ($)</option>
+                        <option value="time">Tiempo Est.</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label-xs" style="color:#00ff88;">Variable Y</label>
+                    <select id="fuel-chart-y" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                        <option value="cost">Costo Total ($)</option>
+                        <option value="fuel">Combustible (L)</option>
+                        <option value="efficiency">Eficiencia (km/L)</option>
+                    </select>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button class="btn btn-glass" onclick="window.addRouteComparison()"
+                        title="Añadir ruta para comparar">
+                        <i class="bi bi-plus-circle me-2"></i>AÑADIR COMPARACIÓN
+                    </button>
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label-xs" style="color:#ff8a33;">Rutas Comparadas</label>
+                    <div id="route-comparison-list" class="layer-list" style="max-height: 80px; overflow-y: auto;">
+                        <div class="empty-state-small">Sin rutas comparadas</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-echarts w-100 mb-3" onclick="window.openFloatingChartPanel()"><i
+                    class="bi bi-cpu me-2"></i>COMPUTAR GRÁFICA</button>
+            <div id="echarts-root-container"
+                style="width: 100%; height: 250px; background: #050000; border-radius: 8px; border: 1px solid rgba(255,102,0,0.3); overflow: hidden; box-shadow: inset 0 0 15px rgba(255,102,0,0.1);">
+                <div id="echarts-root" style="width: 100%; height: 100%;"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Dynamic Data Lens Panel (Bottom Right) -->
+    <aside class="glass-panel lens-panel" id="lens-panel" style="display: none;">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(0, 229, 255, 0.3);">
+            <h6 style="color: #00e5ff;"><i class="bi bi-eye-fill me-2"></i>Lente Analítico <span class="badge"
+                    style="background: rgba(0, 229, 255, 0.2); border: 1px solid #00e5ff; color: #00e5ff; font-size: 0.5rem; margin-left: 5px;">LIVE</span>
+            </h6>
+        </div>
+        <div class="panel-body">
+            <div class="mb-2">
+                <label class="form-label-xs" style="color:#f5932a;">Clasificador / Eje X</label>
+                <select id="lens-parameter-selector" class="custom-select-sm"
+                    style="border-color: rgba(245, 147, 42, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                    onchange="window.updateLensSecondarySelects(); window.forceLensUpdate()">
+                    <option value="">Sin fuente de datos...</option>
+                </select>
+            </div>
+            <div id="lens-vector-options" style="display: none;">
+                <div class="row g-1 mb-2">
+                    <div class="col-7">
+                        <label class="form-label-xs" style="color:#00e5ff;">Métrica / Eje Y</label>
+                        <select id="lens-y-parameter" class="custom-select-sm"
+                            style="border-color: rgba(0, 229, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                            onchange="window.forceLensUpdate()">
+                            <option value="COUNT">Conteo Absoluto</option>
+                        </select>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label-xs" style="color:#00e5ff;">Gráfico</label>
+                        <select id="lens-chart-type" class="custom-select-sm"
+                            style="border-color: rgba(0, 229, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                            onchange="window.forceLensUpdate()">
+                            <option value="bar">Barras</option>
+                            <option value="line">Líneas</option>
+                            <option value="scatter">Puntos</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="control-group-xs mb-2 mt-2">
+                <div class="d-flex justify-content-between">
+                    <label class="form-label-xs">Campo Visión (Radio)</label>
+                    <span class="value-xs" id="lens-radius-val" style="color:#00e5ff;">80px</span>
+                </div>
+                <input type="range" class="custom-range" id="lens-radius" min="20" max="300" value="80"
+                    oninput="window.updateLensRadius(this.value)">
+            </div>
+            <div id="lens-echarts-root"
+                style="width: 100%; height: 160px; background: #050000; border-radius: 8px; border: 1px solid rgba(0,229,255,0.3); overflow: hidden; box-shadow: inset 0 0 15px rgba(0,229,255,0.1);">
+            </div>
+        </div>
+    </aside>
+
+    <!-- Hexbin Tool Panel (Retractable Left) -->
+    <aside class="glass-panel hexbin-panel" id="hexbin-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(162, 0, 255, 0.3);">
+            <h6 style="color: #a200ff;"><i class="bi bi-hexagon-fill me-2"></i>Malla Hexagonal <span class="badge"
+                    style="background: rgba(162, 0, 255, 0.2); border: 1px solid #a200ff; color: #a200ff; font-size: 0.5rem; margin-left: 5px;">RASTER</span>
+            </h6>
+            <button class="btn-icon-sm" onclick="window.toggleHexbinTool()" style="color: #a200ff;"><i
+                    class="bi bi-x"></i></button>
+        </div>
+        <div class="panel-body">
+            <div class="mb-3">
+                <label class="form-label-xs" style="color:#d08cff;">Raster de Entrada</label>
+                <div id="hexbin-raster-name" class="empty-state-small"
+                    style="font-size: 0.8rem; word-break: break-all;">No hay raster cargado</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label-xs">Tamaño del Hexágono (km)</label>
+                <input type="number" id="hexbin-size" class="custom-select-sm"
+                    style="border-color: rgba(162, 0, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="1"
+                    min="0.1" step="0.1">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label-xs">Banda a Analizar</label>
+                <select id="hexbin-band" class="custom-select-sm"
+                    style="border-color: rgba(162, 0, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                    <option value="">Selecciona Raster...</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label-xs">Estadística (Valor Representativo)</label>
+                <select id="hexbin-stat" class="custom-select-sm"
+                    style="border-color: rgba(162, 0, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                    <option value="mean">Promedio</option>
+                    <option value="max">Máximo</option>
+                    <option value="min">Mínimo</option>
+                    <option value="median">Mediana</option>
+                    <option value="mode">Moda</option>
+                </select>
+            </div>
+
+            <button class="btn btn-echarts w-100 mb-2"
+                style="background: rgba(162, 0, 255, 0.2); border-color: #a200ff; color: #a200ff;"
+                onclick="window.generateHexbins()"><i class="bi bi-cpu me-2"></i>GENERAR MALLA VECTORIAL</button>
+        </div>
+    </aside>
+
+    <!-- Floating Control Panel (Right) - Layers & BaseMaps -->
+    <aside class="glass-panel right-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center">
+            <h6><i class="bi bi-layers me-2"></i>Gestor de Capas</h6>
+            <button class="btn-icon-sm" onclick="window.toggleColorManager()" title="Configuración de Color">
+                <i class="bi bi-palette"></i>
+            </button>
+        </div>
+        <div class="panel-body">
+            <div class="section-title">Mapa Base</div>
+            <select class="custom-select" id="basemap-selector" onchange="window.addBaseLayer(this.value)">
+                <option value="Dark Matter">Dark Matter (Carto)</option>
+                <option value="Satellite">Satélite (Esri)</option>
+                <option value="OSM">OpenStreetMap</option>
+                <option value="Voyager">Voyager (Carto)</option>
+                <option value="Topographic">Topográfico</option>
+                <option value="Positron">Positron (Carto)</option>
+            </select>
+
+            <div class="section-title mt-4">Capas Operativas</div>
+            <div id="layer-list" class="layer-list">
+                <div class="empty-state">Inyecta datos para comenzar</div>
+            </div>
+
+            <!-- Elementos ocultos por compatibilidad con script viejo -->
+            <span id="layer-info" style="display: none;">Capas: 0</span>
+        </div>
+    </aside>
+
+    <!-- Advanced Color Manager Panel (Retractable) -->
+    <aside class="glass-panel color-manager-panel" id="color-manager-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center">
+            <h6><i class="bi bi-palette-fill me-2"></i>Gestor de Color</h6>
+            <button class="btn-icon-sm" onclick="window.toggleColorManager()"><i class="bi bi-x"></i></button>
+        </div>
+        <div class="panel-body">
+            <div class="mb-3">
+                <label class="form-label-xs" style="color:#0ff;">Tipo de Capa a Estilizar</label>
+                <select id="color-manager-mode" class="custom-select-sm" style="border-color: rgba(0, 255, 255, 0.5);"
+                    onchange="window.updateColorManagerTab()">
+                    <option value="raster">Imágenes Raster</option>
+                    <option value="vector">Capas Vectoriales</option>
+                </select>
+            </div>
+
+            <div id="color-tab-raster">
+                <div id="no-raster-selected" class="empty-state-small">
+                    Selecciona un Raster para configurar.
+                </div>
+
+                <div id="raster-controls" style="display: none;">
+                    <div class="section-title">Visualización Spectral</div>
+                    <div class="mb-3">
+                        <label class="form-label-xs">Modo de Renderizado</label>
+                        <select id="raster-mode" class="custom-select-sm"
+                            onchange="window.updateRasterControlsDisplay()">
+                            <option value="single">Mono-Banda (Escalar)</option>
+                            <option value="rgb">Multi-Banda (RGB)</option>
+                        </select>
+                    </div>
+
+                    <!-- Single Band Controls -->
+                    <div id="single-band-controls">
+                        <div class="mb-3">
+                            <label class="form-label-xs">Banda de Datos</label>
+                            <select id="single-band-selector" class="custom-select-sm"
+                                onchange="window.applyAdvancedStyle()"></select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label-xs">Rampa de Color</label>
+                            <input type="hidden" id="color-ramp-selector" value="viridis">
+                            <div class="dropdown">
+                                <button
+                                    class="color-select-btn w-100 d-flex justify-content-between align-items-center dropdown-toggle"
+                                    type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                    style="border-radius:4px;">
+                                    <span id="raster-ramp-label">Viridis (Percepción)</span>
+                                    <div id="raster-ramp-preview" class="color-ramp-preview ramp-viridis ms-2"></div>
+                                </button>
+                                <ul class="dropdown-menu color-dropdown w-100">
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('viridis', 'Viridis (Percepción)')">
+                                            <span>Viridis (Percepción)</span>
+                                            <div class="color-ramp-preview ramp-viridis"></div>
+                                        </a></li>
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('inferno', 'Inferno (Térmico)')">
+                                            <span>Inferno (Térmico)</span>
+                                            <div class="color-ramp-preview ramp-inferno"></div>
+                                        </a></li>
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('spectral', 'Spectral (Geofísica)')">
+                                            <span>Spectral (Geofísica)</span>
+                                            <div class="color-ramp-preview ramp-Spectral"></div>
+                                        </a></li>
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('rdylbu', 'Red-Yellow-Blue')">
+                                            <span>Red-Yellow-Blue</span>
+                                            <div class="color-ramp-preview ramp-rdylbu"></div>
+                                        </a></li>
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('greys', 'Greys (Escala Grises)')">
+                                            <span>Greys (Escala Grises)</span>
+                                            <div class="color-ramp-preview ramp-greys"></div>
+                                        </a></li>
+                                    <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                            onclick="window.setRasterRamp('jet', 'Jet (Clásico)')">
+                                            <span>Jet (Clásico)</span>
+                                            <div class="color-ramp-preview ramp-jet"></div>
+                                        </a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RGB Controls -->
+                    <div id="rgb-band-controls" style="display: none;">
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <label class="form-label-xs">Rojo (R)</label>
+                                <select id="r-band-selector" class="custom-select-sm"
+                                    onchange="window.applyAdvancedStyle()"></select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label-xs">Verde (G)</label>
+                                <select id="g-band-selector" class="custom-select-sm"
+                                    onchange="window.applyAdvancedStyle()"></select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label-xs">Azul (B)</label>
+                                <select id="b-band-selector" class="custom-select-sm"
+                                    onchange="window.applyAdvancedStyle()"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="separator-dash my-3"></div>
+
+                    <div class="section-title">Ajustes de Imagen Fluidos</div>
+
+                    <div class="control-group-xs mb-2">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label-xs">Brillo</label>
+                            <span class="value-xs" id="brightness-val">100%</span>
+                        </div>
+                        <input type="range" class="custom-range" id="raster-brightness" min="0" max="200" value="100"
+                            oninput="window.applyImageFilters()">
+                    </div>
+
+                    <div class="control-group-xs mb-2">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label-xs">Contraste</label>
+                            <span class="value-xs" id="contrast-val">100%</span>
+                        </div>
+                        <input type="range" class="custom-range" id="raster-contrast" min="0" max="200" value="100"
+                            oninput="window.applyImageFilters()">
+                    </div>
+
+                    <div class="control-group-xs mb-2">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label-xs">Saturación</label>
+                            <span class="value-xs" id="saturation-val">100%</span>
+                        </div>
+                        <input type="range" class="custom-range" id="raster-saturation" min="0" max="200" value="100"
+                            oninput="window.applyImageFilters()">
+                    </div>
+
+                    <div class="control-group-xs">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label-xs">Opacidad</label>
+                            <span class="value-xs" id="opacity-val">80%</span>
+                        </div>
+                        <input type="range" class="custom-range" id="raster-opacity" min="0" max="100" value="80"
+                            oninput="window.applyImageFilters()">
+                    </div>
+                </div>
+            </div> <!-- End color-tab-raster -->
+
+            <!-- VECTOR TAB -->
+            <div id="color-tab-vector" style="display: none;">
+                <div id="no-vector-selected" class="empty-state-small">
+                    Añade una capa vectorial para estilizar.
+                </div>
+                <div id="vector-controls" style="display: none;">
+                    <div class="section-title">Categorización por Atributos</div>
+                    <div class="mb-3">
+                        <label class="form-label-xs">Capa Vectorial</label>
+                        <select id="vector-layer-selector" class="custom-select-sm"
+                            onchange="window.updateVectorAttributesSelector()"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-xs">Campo (Clasificador)</label>
+                        <select id="vector-attribute-selector" class="custom-select-sm"
+                            onchange="window.applyVectorStyle()"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-xs">Rampa de Color</label>
+                        <input type="hidden" id="vector-color-ramp" value="Set1">
+                        <div class="dropdown">
+                            <button
+                                class="color-select-btn w-100 d-flex justify-content-between align-items-center dropdown-toggle"
+                                type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                                style="border-radius:4px;">
+                                <span id="vector-ramp-label">Set1 (Categórico)</span>
+                                <div id="vector-ramp-preview" class="color-ramp-preview ramp-Set1 ms-2"></div>
+                            </button>
+                            <ul class="dropdown-menu color-dropdown w-100">
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Set1', 'Set1 (Categórico)')">
+                                        <span>Set1 (Categórico)</span>
+                                        <div class="color-ramp-preview ramp-Set1"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Set2', 'Set2 (Categórico)')">
+                                        <span>Set2 (Categórico)</span>
+                                        <div class="color-ramp-preview ramp-Set2"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Set3', 'Set3 (Categórico)')">
+                                        <span>Set3 (Categórico)</span>
+                                        <div class="color-ramp-preview ramp-Set3"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Paired', 'Paired (Parejas)')">
+                                        <span>Paired (Parejas)</span>
+                                        <div class="color-ramp-preview ramp-Paired"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Dark2', 'Dark2')">
+                                        <span>Dark2</span>
+                                        <div class="color-ramp-preview ramp-Dark2"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('Spectral', 'Spectral')">
+                                        <span>Spectral (Evolución)</span>
+                                        <div class="color-ramp-preview ramp-Spectral"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('viridis', 'Viridis')">
+                                        <span>Viridis</span>
+                                        <div class="color-ramp-preview ramp-viridis"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('inferno', 'Inferno')">
+                                        <span>Inferno</span>
+                                        <div class="color-ramp-preview ramp-inferno"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('magma', 'Magma')">
+                                        <span>Magma (Profundo)</span>
+                                        <div class="color-ramp-preview ramp-magma"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('plasma', 'Plasma (High energy)')">
+                                        <span>Plasma (High energy)</span>
+                                        <div class="color-ramp-preview ramp-plasma"></div>
+                                    </a></li>
+                                <li><a class="dropdown-item d-flex justify-content-between align-items-center"
+                                        onclick="window.setVectorRamp('cividis', 'Cividis (Accesible)')">
+                                        <span>Cividis (Accesible)</span>
+                                        <div class="color-ramp-preview ramp-cividis"></div>
+                                    </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mb-3 d-flex align-items-center">
+                        <div class="form-check form-switch custom-switch">
+                            <input class="form-check-input" type="checkbox" id="vector-invert-ramp" onchange="window.applyVectorStyle()">
+                            <label class="form-check-label ms-2" for="vector-invert-ramp" style="font-size: 0.65rem; color: #fff;">Invertir Rampa</label>
+                        </div>
+                    </div>
+                    <div class="control-group-xs mb-2 mt-3">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label-xs">Opacidad de Capa</label>
+                            <span class="value-xs" id="vector-opacity-val">80%</span>
+                        </div>
+                        <input type="range" class="custom-range" id="vector-opacity" min="0" max="100" value="80"
+                            oninput="window.applyVectorStyle()">
+                    </div>
+                </div>
+            </div> <!-- End color-tab-vector -->
+        </div>
+    </aside>
+
+    <!-- Floating Coordinates (Bottom Right) -->
+    <div class="glass-coords">
+        <span id="coordinates"><i class="bi bi-crosshair me-2"></i>Lat: --, Lng: --</span> |
+        <span id="scale"><i class="bi bi-arrows-expand me-2"></i>Zoom: --</span>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <span>COMPUTANDO DATOS GEOESPACIALES...</span>
+    </div>
+
+    <!-- Hidden Inputs -->
+    <input type="file" id="file-upload-input" accept=".shp,.zip,.geojson,.json,.csv" style="display: none;"
+        onchange="window.handleFileUpload(event)">
+    <input type="file" id="raster-upload-input" accept=".tif,.tiff,.geotiff" style="display: none;"
+        onchange="window.handleRasterUpload(event)">
+
+    <!-- Attribute Table Modal -->
+    <div class="modal fade glass-modal" id="attributeTableModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-table me-2"></i>Data Lake: Atributos</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="attribute-table" style="min-height: 400px; width: 100%;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-glass" onclick="window.exportTableCSV()">
+                        <i class="bi bi-download me-2"></i>Exportar Payload
+                    </button>
+                    <button class="btn btn-glass-cyan shadow-glow" onclick="window.generateChartFromData()">
+                        <i class="bi bi-graph-up-arrow me-2"></i>Estudio Gráfico
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Modal -->
+    <div class="modal fade glass-modal" id="chartModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" style="color:#0ff;"><i class="bi bi-activity me-2"></i>Panel Analítico</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="chart-controls">
+                        <select id="chart-type" class="custom-select">
+                            <option value="bar">Gráfica de Barras</option>
+                            <option value="line">Gráfica de Líneas</option>
+                            <option value="doughnut">Dona Estática</option>
+                            <option value="pie">Pastel Proporcional</option>
+                        </select>
+                        <select id="chart-xAxis" class="custom-select"></select>
+                        <select id="chart-yAxis" class="custom-select"></select>
+                        <button class="btn btn-glass-cyan" onclick="window.renderChart()">Sintetizar</button>
+                    </div>
+                    <div class="chart-canvas-container mt-4">
+                        <canvas id="dataChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raster Style Modal -->
+    <div class="modal fade glass-modal" id="rasterStyleModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" style="color:#0ff;"><i class="bi bi-palette me-2"></i>Estilo de Raster</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label" style="color: #0ff;">Rampa de Color</label>
+                        <select id="raster-color-ramp" class="custom-select">
+                            <option value="viridis">Viridis</option>
+                            <option value="inferno">Inferno</option>
+                            <option value="spectral">Spectral</option>
+                            <option value="rdylbu">Red-Yellow-Blue</option>
+                            <option value="greys">Greys</option>
+                            <option value="jet">Jet</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-glass-cyan" onclick="window.applyRasterStyle()"><i
+                            class="bi bi-brush me-2"></i>Aplicar Estilo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fuel Cost Calculator Panel (Retractable Left) -->
+    <aside class="glass-panel fuel-cost-panel" id="fuel-cost-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(0, 255, 136, 0.3);">
+            <h6 style="color: #00ff88;"><i class="bi bi-fuel-pump-fill me-2"></i>Costo Combustible <span class="badge"
+                    style="background: rgba(0, 255, 136, 0.2); border: 1px solid #00ff88; color: #00ff88; font-size: 0.5rem; margin-left: 5px;">PRO</span>
+            </h6>
+            <button class="btn-icon-sm" onclick="window.toggleFuelCostPanel()" style="color: #00ff88;"><i
+                    class="bi bi-x"></i></button>
+        </div>
+        <div class="panel-body d-flex flex-row flex-wrap gap-3" style="align-items: flex-start; overflow-y: auto; max-height: 35vh;">
+            <!-- Column 1: Vehicle Configuration -->
+            <div class="flex-grow-1" style="min-width: 200px;">
+                <div class="section-title">Configuración Vehículo</div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00ff88;">Precio Combustible ($/litro)</label>
+                    <input type="number" id="fuel-price" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="1.20"
+                        min="0" step="0.01">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00ff88;">Rendimiento (km/litro)</label>
+                    <input type="number" id="fuel-efficiency" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="12"
+                        min="0.1" step="0.1">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00ff88;">Tipo Vehículo</label>
+                    <select id="vehicle-type" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                        onchange="window.applyVehiclePreset()">
+                        <option value="custom">Personalizado</option>
+                        <option value="carro">Carro (12 km/l)</option>
+                        <option value="suv">SUV (10 km/l)</option>
+                        <option value="camioneta">Camioneta (8 km/l)</option>
+                        <option value="moto">Moto (35 km/l)</option>
+                        <option value="camion">Camión (6 km/l)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Column 2: Traffic and Speed -->
+            <div class="flex-grow-1" style="min-width: 200px; border-left: 1px dashed rgba(0,255,136,0.3); padding-left: 15px;">
+                <div class="section-title">Tráfico y Velocidad</div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00e5ff;">Velocidad General (km/h)</label>
+                    <input type="number" id="fuel-speed" class="custom-select-sm"
+                        style="border-color: rgba(0, 229, 255, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="60"
+                        min="1" step="1">
+                </div>
+                <!-- Tramos de velocidad dinámicos -->
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label-xs" style="color:#00e5ff;">Tramos de Velocidad</label>
+                        <button onclick="window.addSpeedSegment()" title="Agregar tramo"
+                            style="background:rgba(0,229,255,0.15); border:1px solid rgba(0,229,255,0.4); color:#00e5ff; border-radius:4px; padding:2px 8px; font-size:0.65rem; cursor:pointer;">
+                            <i class="bi bi-plus"></i> Añadir
+                        </button>
+                    </div>
+                    <!-- input oculto de compatibilidad legacy -->
+                    <input type="hidden" id="segment-speeds" value="">
+                    <div id="speed-segments-list" style="display:flex; flex-direction:column; gap:5px; max-height:80px; overflow-y:auto;">
+                        <!-- Los tramos se generan dinámicamente -->
+                    </div>
+                    <!-- Leyenda de colores -->
+                    <div id="speed-color-legend" style="display:none; margin-top:6px; padding:5px 7px; background:rgba(0,0,0,0.3); border-radius:5px; border:1px solid rgba(0,229,255,0.15);">
+                        <div style="font-size:0.55rem; color:rgba(255,255,255,0.5); margin-bottom:4px;">COLORES EN MAPA</div>
+                        <div id="speed-legend-items" style="display:flex; flex-direction:column; gap:3px;"></div>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#ffaa00;">Duración de Tacos (Min)</label>
+                    <input type="number" id="traffic-delay" class="custom-select-sm"
+                        style="border-color: rgba(255, 170, 0, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="0"
+                        min="0" step="1"
+                        title="El tiempo detenido en atascos reduce el rendimiento porque el auto sigue consumiendo.">
+                </div>
+            </div>
+
+            <!-- Column 3: Route Tools -->
+            <div class="flex-grow-1" style="min-width: 200px; border-left: 1px dashed rgba(0,255,136,0.3); padding-left: 15px;">
+                <div class="section-title">Herramientas Ruta</div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00ff88;">Modo Dibujo</label>
+                    <select id="draw-mode" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                        onchange="window.changeDrawMode()">
+                        <option value="points">Puntos (Vértices)</option>
+                        <option value="line">Línea Continua</option>
+                    </select>
+                </div>
+                <div class="d-flex gap-1 mb-2" style="flex-wrap: wrap;">
+                    <button class="btn btn-glass-cyan" onclick="window.startRouteDrawing()" title="Dibujar ruta en mapa"
+                        style="padding: 6px 7px; min-width: auto;">
+                        <i class="bi bi-pin-map"></i>
+                    </button>
+                    <button class="btn btn-glass" onclick="window.finishRouteDrawing()" title="Finalizar dibujo de ruta"
+                        style="padding: 6px 7px; min-width: auto;">
+                        <i class="bi bi-check-circle"></i>
+                    </button>
+                    <button class="btn btn-glass" onclick="window.clearRoutePoints()" title="Limpiar ruta actual"
+                        style="padding: 6px 7px; min-width: auto;">
+                        <i class="bi bi-eraser"></i>
+                    </button>
+                    <button class="btn btn-glass" onclick="window.calculateRoute()" title="Calcular ruta y costos"
+                        style="padding: 6px 7px; min-width: auto;">
+                        <i class="bi bi-calculator"></i>
+                    </button>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label-xs" style="color:#00ff88;">Modo Cálculo</label>
+                    <select id="route-mode" class="custom-select-sm"
+                        style="border-color: rgba(0, 255, 136, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                        <option value="direct">Distancia Directa</option>
+                        <option value="road">Carretera (OSRM)</option>
+                        <option value="urban">Calles Urbanas (Sentido de Tránsito)</option>
+                    </select>
+                </div>
+                <!-- Estado conectividad OSRM -->
+                <div style="display:flex; align-items:center; gap:6px; padding:5px 8px; background:rgba(0,0,0,0.3); border-radius:5px; border:1px solid rgba(255,255,255,0.07);">
+                    <span id="osrm-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#888; flex-shrink:0; transition:background 0.4s;"></span>
+                    <span id="osrm-status-text" style="font-size:0.55rem; color:#aaa; flex:1;">Sin verificar</span>
+                </div>
+            </div>
+
+            <!-- Column 4: Results -->
+            <div class="flex-grow-1" style="min-width: 250px; border-left: 1px dashed rgba(0,255,136,0.3); padding-left: 15px;">
+                <div class="section-title">Resultados</div>
+                <div id="route-results" class="p-2 h-100"
+                    style="background: rgba(0,255,136,0.05); border-radius: 6px; border: 1px solid rgba(0,255,136,0.2); min-height: 120px;">
+                    <div class="text-muted" style="font-size: 0.6rem; text-align: center; margin-top: 20px;">Añade puntos para calcular</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 3D Extrusion Panel (Retractable Left) -->
+    <aside class="glass-panel mode-3d-panel" id="mode-3d-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(255, 170, 0, 0.3);">
+            <h6 style="color: #ffaa00;"><i class="bi bi-box me-2"></i>Modo 3D <span class="badge"
+                    style="background: rgba(255, 170, 0, 0.2); border: 1px solid #ffaa00; color: #ffaa00; font-size: 0.5rem; margin-left: 5px;">EXTRUSIÓN</span>
+            </h6>
+            <button class="btn-icon-sm" onclick="window.toggle3DModePanel()" style="color: #ffaa00;"><i
+                    class="bi bi-x"></i></button>
+        </div>
+        <div class="panel-body">
+            <div class="mb-3">
+                <label class="form-label-xs" style="color:#ffaa00;">Capa Vectorial</label>
+                <select id="mode3d-layer-select" class="custom-select-sm"
+                    style="border-color: rgba(255, 170, 0, 0.5); color: #fff; background: rgba(0,0,0,0.5);"
+                    onchange="window.update3DModeAttributes()">
+                    <option value="">Selecciona Vector...</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label-xs" style="color:#ffaa00;">Columna (Altura)</label>
+                <select id="mode3d-attribute-select" class="custom-select-sm"
+                    style="border-color: rgba(255, 170, 0, 0.5); color: #fff; background: rgba(0,0,0,0.5);">
+                    <option value="">Selecciona Atributo...</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <label class="form-label-xs">Exageración Vertical (x)</label>
+                    <span id="mode3d-mult-val" class="value-xs">1.0</span>
+                </div>
+                <input type="range" id="mode3d-multiplier" class="custom-range"
+                    style="border-color: rgba(255, 170, 0, 0.5); color: #fff; background: rgba(0,0,0,0.5);" value="1"
+                    min="0.1" max="10" step="0.1" oninput="document.getElementById('mode3d-mult-val').innerText = this.value">
+            </div>
+
+            <!-- Los controladores de inclinación y rotación han sido movidos al mapa para mayor limpieza -->
+            <div class="mb-3 d-none">
+                <input type="range" id="mode3d-tilt" value="45" min="0" max="82">
+                <input type="range" id="mode3d-rotate" value="0" min="-180" max="180">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label-xs">Color de Tapa Superior</label>
+                <input type="color" id="mode3d-base-color" class="form-control form-control-color w-100" style="height: 30px; background: rgba(0,0,0,0.5); border-color: rgba(255,170,0,0.5);" value="#ffaa00">
+            </div>
+
+            <div class="d-grid gap-2">
+                <button class="btn btn-echarts mb-1"
+                    style="background: rgba(255, 170, 0, 0.2); border-color: #ffaa00; color: #ffaa00;"
+                    onclick="window.render3DExtrusion()">
+                    <i class="bi bi-play-fill me-2"></i>RENDERIZAR VOLUMEN
+                </button>
+                <button class="btn btn-glass-cyan mb-1"
+                    style="border-color: rgba(255, 255, 255, 0.3); color: #fff;"
+                    onclick="if(window.Mode3DController) window.Mode3DController.resetEnvironment()">
+                    <i class="bi bi-arrow-counterclockwise me-2"></i>LIMPIAR EFECTOS
+                </button>
+                <button class="btn btn-echarts"
+                    style="background: rgba(255, 0, 0, 0.2); border-color: #ff4444; color: #ff4444;"
+                    onclick="window.close3DExtrusion()">
+                    <i class="bi bi-x-circle me-2"></i>CERRAR PANEL 3D
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Floating Chart Panel (Resizable y Draggable) -->
+    <aside class="glass-panel floating-chart-panel" id="floating-chart-panel" style="display: none;">
+        <div class="panel-header d-flex justify-content-between align-items-center"
+            style="border-bottom-color: rgba(255, 102, 0, 0.3);">
+            <h6 style="color: #ff6600;"><i class="bi bi-graph-up-arrow me-2"></i>Análisis Gráfico</h6>
+            <div class="panel-actions">
+                <button class="btn-close-panel" onclick="window.closeFloatingChartPanel()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        <div class="panel-body">
+            <div id="floating-echarts-root" style="width: 100%; height: 400px;"></div>
+        </div>
+    </aside>
+
+    <!-- CyberGlobe Modal (Modernizado para coincidir) -->
+    <div class="modal fade" id="cyberGlobeModal" tabindex="-1">
+        <div class="modal-dialog modal-fullscreen" style="height: 100vh;">
+            <div class="modal-content bg-dark border-0" style="height: 100vh;">
+                <div class="modal-header border-0 position-absolute w-100 z-3"
+                    style="background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);">
+                    <h5 class="modal-title ms-4 mt-3"
+                        style="color: #0ff; text-shadow: 0 0 10px #0ff; font-family: 'Outfit'; font-weight: 700; letter-spacing: 2px;">
+                        <i class="bi bi-hdd-network me-2"></i> MAINFRAME GLOBAL
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white me-4 mt-3" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0 position-relative bg-black" id="globeViz" style="height: 100vh;">
+                    <div id="globeLoading" class="position-absolute top-50 start-50 translate-middle text-center"
+                        style="color:#0ff;">
+                        <div class="spinner-border mb-3" style="width:3rem;height:3rem;"></div>
+                        <div style="font-family: 'Outfit'; font-weight: 500; letter-spacing: 4px;">CALIBRANDO
+                            SENSORES...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/globe.gl@2.30.9/dist/globe.gl.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Raster & Data Utilities -->
+    <script src="https://cdn.jsdelivr.net/npm/proj4@2.9.0/dist/proj4.js"></script>
+    <!-- GeoTIFF.js: decodificador completo (LZW, Deflate, JPEG, BigTIFF, Sentinel) -->
+    <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+    <!-- Georaster: usa geotiff internamente para soporte universal de GeoTIFF -->
+    <script src="https://cdn.jsdelivr.net/npm/georaster@1.6.0/dist/georaster.browser.bundle.js"></script>
+    <!-- GeoRasterLayer 4.x: el renderer de Leaflet para Rasters (versión verificada) -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/georaster-layer-for-leaflet@4.1.2/georaster-layer-for-leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
+    <!-- Apache ECharts for advanced premium data visualization without WASM -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+
+    <!-- Turf & Geoblaze for Hexbin & Raster Analysis -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://unpkg.com/geoblaze"></script>
+
+    <!-- App Scripts -->
+    <script src="./src/core/MapManager.js"></script>
+    <script src="./src/ui/UIManager.js"></script>
+    <script src="./src/ui/ResizePanel.js"></script>
+    <script src="./src/core/FuelCostManager.js"></script>
+    <script src="./src/core/FuelChartManager.js"></script>
+    <script src="./src/core/Mode3DManager.js"></script>
+    <script src="./src/main.js"></script>
+</body>
+
+</html>

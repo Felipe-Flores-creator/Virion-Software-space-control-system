@@ -1,0 +1,40 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare text files you want to be checked in as text
+# and have CRLF line endings normalized
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell scripts should use LF
+*.sh text eol=lf
+
+# Python files
+*.py text
+*.txt text
+*.md text
+*.json text
+*.xml text
+*.html text
+*.css text
+*.js text
+
+# Binary files - don't touch
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary

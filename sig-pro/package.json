@@ -1,0 +1,44 @@
+{
+    "name": "sig-pro",
+    "version": "1.0.0",
+    "description": "Sistema de Información Geográfica profesional portable",
+    "main": "index.html",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "keywords": [
+        "sig",
+        "geoespacial",
+        "gis",
+        "mapas"
+    ],
+    "author": "Felipe Flores",
+    "license": "MIT",
+    "devDependencies": {
+        "vite": "^8.0.2",
+        "tailwindcss": "^3.4.0",
+        "autoprefixer": "^10.4.16",
+        "postcss": "^8.4.32"
+    },
+    "dependencies": {
+        "@popperjs/core": "^2.11.8",
+        "@turf/turf": "^6.5.0",
+        "axios": "^1.6.2",
+        "bootstrap": "^5.3.2",
+        "bootstrap-icons": "^1.11.3",
+        "framer-motion": "^10.16.16",
+        "clsx": "^2.0.0",
+        "tailwind-merge": "^2.2.0",
+        "@tabler/icons-webfont": "^2.44.0",
+        "geotiff": "^2.0.7",
+        "leaflet": "^1.9.4",
+        "leaflet-draw": "^1.0.4",
+        "leaflet.markercluster": "^1.5.3",
+        "proj4": "^2.9.3",
+        "proj4leaflet": "^1.0.2",
+        "three": "^0.160.0",
+        "three-globe": "^2.30.9"
+    }
+}
